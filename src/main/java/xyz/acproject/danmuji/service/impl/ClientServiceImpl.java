@@ -207,6 +207,7 @@ public class ClientServiceImpl implements ClientService {
         }
     }
 
+    @Override
     public boolean closeConnService() {
         boolean flag = false;
         if (PublicDataConf.webSocketProxy != null) {

@@ -54,11 +54,13 @@ public class AutoReplyThread extends Thread {
                     && !StringUtils.isEmpty(PublicDataConf.replys.get(0).getBarrage())) {
                 AutoReply autoReply = PublicDataConf.replys.get(0);
                 for (AutoReplySet autoReplySet : getAutoReplySets()) {
+                    // 屏蔽词处理
                     if (null != autoReplySet.getShields() && !autoReplySet.getShields().isEmpty()
                             && autoReplySet.getShields().size() > 0) {
                         kSize = autoReplySet.getKeywords().size();
                         kNum = 0;
                         is_shield = false;
+                        // 判断屏蔽词是否命中
                         for (String shield : autoReplySet.getShields()) {
                             if (autoReply.getBarrage().contains(shield)) {
                                 is_shield = true;
@@ -66,6 +68,12 @@ public class AutoReplyThread extends Thread {
                             }
                         }
                         if (!is_shield) {
+                            if (autoReply.getBarrage().startsWith("#") || autoReply.getBarrage().startsWith("@")) {
+                                // do something
+                                is_send = handle(autoReplySet, replyString, autoReply, hourString, hour, hourReplace,
+                                        is_send);
+                                break;
+                            }
                             for (String keyword : autoReplySet.getKeywords()) {
                                 if (StringUtils.indexOf(keyword, "||") != -1) {
                                     keywords = StringUtils.split(keyword, "||");
@@ -83,13 +91,20 @@ public class AutoReplyThread extends Thread {
                             }
                             if (kNum == kSize) {
                                 if (!StringUtils.isEmpty(autoReplySet.getReply())) {
-                                    is_send =   handle(autoReplySet, replyString, autoReply, hourString, hour, hourReplace,
+                                    is_send = handle(autoReplySet, replyString, autoReply, hourString, hour, hourReplace,
                                             is_send);
                                     break;
                                 }
                             }
                         }
                     } else {
+                        if (autoReply.getBarrage().startsWith("#") || autoReply.getBarrage().startsWith("@")) {
+                            // do something
+                            is_send = handle(autoReplySet, replyString, autoReply, hourString, hour, hourReplace,
+                                    is_send);
+                            break;
+                        }
+                        // 没有屏蔽词
                         kSize = autoReplySet.getKeywords().size();
                         kNum = 0;
                         is_shield = false;
@@ -172,7 +187,7 @@ public class AutoReplyThread extends Thread {
     }
 
     private synchronized boolean handle(AutoReplySet autoReplySet, String replyString, AutoReply autoReply,
-                                     String hourString, short hour, String hourReplace, boolean is_send) {
+                                        String hourString, short hour, String hourReplace, boolean is_send) {
         //拟议自动回复处理
         //1. 针对特定人?
         //2. 刷屏?
@@ -190,9 +205,9 @@ public class AutoReplyThread extends Thread {
         }
         // 替换%TIME%
         if (!replyString.equals("%TIME%")) {
-            replyString = StringUtils.replace(replyString, "%TIME%", JodaTimeUtils.format(new Date(),TimeZone.getTimeZone("GMT+08:00"),"yyyy-MM-dd HH:mm:ss"));
+            replyString = StringUtils.replace(replyString, "%TIME%", JodaTimeUtils.format(new Date(), TimeZone.getTimeZone("GMT+08:00"), "yyyy-MM-dd HH:mm:ss"));
         } else {
-            replyString =JodaTimeUtils.format(new Date(),TimeZone.getTimeZone("GMT+08:00"),"yyyy-MM-dd HH:mm:ss");
+            replyString = JodaTimeUtils.format(new Date(), TimeZone.getTimeZone("GMT+08:00"), "yyyy-MM-dd HH:mm:ss");
         }
         // 替换%LIVETIME%
         if (!replyString.equals("%LIVETIME%")) {
@@ -236,13 +251,26 @@ public class AutoReplyThread extends Thread {
             }
             if (!StringUtils.isEmpty(PublicDataConf.USERCOOKIE)) {
                 try {
-                    if (HttpUserData.httpPostAddBlock(autoReply.getUid(), hour) != 0)
+                    if (HttpUserData.httpPostAddBlock(autoReply.getUid(), hour) != 0) {
                         replyString = "";
+                    }
                 } catch (Exception e) {
                     // TODO: handle exception
                 }
             }
         }
+
+        // 聊天匹配
+        if (StringUtils.containsAny(replyString, "CHAT")) {
+            if (autoReply.getBarrage().contains("@") || autoReply.getBarrage().contains("#")) {
+                String question = autoReply.getBarrage().replace("#", "").replace("@", "");
+                String answer = apiService.chat(question, null);
+                if (StringUtils.isNotBlank(answer)) {
+                    replyString = answer;
+                }
+            }
+        }
+
         if (StringUtils.containsAny(replyString, "%WEATHER%", "%W_CITY%", "%W_DATE%", "%H_WENDU%", "%L_WENDU%", "%WENDU%", "%W_FX%", "%W_TYPE%", "%W_FL%", "%W_TIPS%")) {
             if (autoReply.getBarrage().contains("天气") && (autoReply.getBarrage().contains("@") || autoReply.getBarrage().contains("#"))) {
                 int path1 = autoReply.getBarrage().indexOf("@") >= 0 ? autoReply.getBarrage().indexOf("@") : autoReply.getBarrage().indexOf("#");
@@ -343,11 +371,11 @@ public class AutoReplyThread extends Thread {
                             }
                             //感冒小提示 只有当天有 未来和过去没有
                             if (replyString.contains("%W_TIPS%")) {
-                                replyString = StringUtils.replace(replyString, "%W_TIPS%","");
+                                replyString = StringUtils.replace(replyString, "%W_TIPS%", "");
                             }
                         }
                     }
-                    replyString = StringUtils.replace(replyString,"℃","度");
+                    replyString = StringUtils.replace(replyString, "℃", "度");
                 } else {
                     replyString = "";
                 }
